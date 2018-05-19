@@ -17,6 +17,10 @@ assert.ok(!!VERIFY_TOKEN, 'VERIFY_TOKEN env var required');
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 assert.ok(!!PAGE_ACCESS_TOKEN, 'PAGE_ACCESS_TOKEN env var required');
 
+// Facebook page ID (the page we listen for changes like comments etc)
+const PAGE_ID = process.env.PAGE_ID;
+assert.ok(!!PAGE_ID, 'PAGE_ID env var required');
+
 // Sets server port and logs message on success
 app.listen(process.env.PORT || 1337, () => console.log('webhook is listening'));
 
@@ -70,35 +74,53 @@ function callSendAPI(sender_psid, response) {
   });
 }
 
+function callSubscribe() {
+  // Send the HTTP request to the Messenger Platform
+	const url = `https://graph.facebook.com/v3.0/${ PAGE_ID }/subscribed_apps`;
+	console.log('callSubscibe', url);
+  request({
+    "uri": url,
+    "qs": { "access_token": PAGE_ACCESS_TOKEN },
+    "method": "GET",
+  }, (err, res, body) => {
+    if (!err) {
+      console.log('Page subscription sent', body)
+    } else {
+      console.error("Unable to send subscription:", err);
+    }
+  });
+}
+callSubscribe();
+
 // the endpoint for our webhook 
 app.post('/webhook', (req, res) => {  
  
   let body = req.body;
-	console.log('webhook POST', body);
+	console.log('*****************************************');
+	console.log('webhook POST', JSON.stringify(body));
+	console.log('**********');
 
   // Checks this is an event from a page subscription
   if (body.object === 'page') {
 
     // Iterates over each entry - there may be multiple if batched
     body.entry.forEach(function(entry) {
+			if(entry.messaging) {
+				// Gets the message. entry.messaging is an array, but 
+				// will only ever contain one message, so we get index 0
+				let webhook_event = entry.messaging[0];
 
-      // Gets the message. entry.messaging is an array, but 
-      // will only ever contain one message, so we get index 0
-      let webhook_event = entry.messaging[0];
-      console.log('webhook event', webhook_event);
+				// Get the sender PSID
+				let sender_psid = webhook_event.sender.id;
 
-			// Get the sender PSID
-			let sender_psid = webhook_event.sender.id;
-			console.log('Sender PSID: ' + sender_psid);
-
-			// Check if the event is a message or postback and
-			// pass the event to the appropriate handler function
-			if (webhook_event.message) {
-				handleMessage(sender_psid, webhook_event.message);        
-			} else if (webhook_event.postback) {
-				handlePostback(sender_psid, webhook_event.postback);
+				// Check if the event is a message or postback and
+				// pass the event to the appropriate handler function
+				if (webhook_event.message) {
+					handleMessage(sender_psid, webhook_event.message);        
+				} else if (webhook_event.postback) {
+					handlePostback(sender_psid, webhook_event.postback);
+				}
 			}
-
     });
 
     // Returns a '200 OK' response to all requests
@@ -110,8 +132,16 @@ app.post('/webhook', (req, res) => {
 
 });
 
+function handlePostback(sender_psid, received_message) {
+	console.log('**********');
+	console.log('handlePostback', received_message);
+	console.log('**********');
+}
+
 function handleMessage(sender_psid, received_message) {
+	console.log('**********');
 	console.log('handleMessage', received_message);
+	console.log('**********');
 
   let response;
 
